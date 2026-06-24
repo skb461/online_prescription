@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>RxMaster – Create Prescription</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes zoomIn {
+            from {
+                opacity: 0;
+                transform: scale(.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-zoom-in {
+            animation: zoomIn .15s cubic-bezier(.34, 1.56, .64, 1) forwards;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn .2s ease-out forwards;
+        }
+
+        @media print {
+            @page {
+                margin: .4in;
+            }
+
+            body * {
+                visibility: hidden;
+            }
+
+            #print-prescription-viewport,
+            #print-prescription-viewport * {
+                visibility: visible;
+            }
+
+            #print-prescription-viewport {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 10in;
+                height: 7.2in;
+                background: white !important;
+                color: #000 !important;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-[#f8fafc] font-sans text-slate-800 min-h-screen flex">
+
+    {{-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════════════════════ --}}
+    <aside class="w-64 bg-slate-900 text-slate-200 flex flex-col fixed inset-y-0 left-0 z-40 shadow-xl no-print">
+        <div class="p-5 border-b border-slate-800 flex items-center space-x-2">
+            <span class="text-2xl">🩺</span>
+            <span class="text-xl font-black tracking-tight text-white">RxMaster Pro</span>
+        </div>
+        <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+            <a href="{{ route('prescriptions.create') }}"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl bg-indigo-600 text-white shadow-md">
+                <span>📝</span><span class="font-semibold text-sm">Create Prescription</span>
+            </a>
+            <a href="{{ route('prescriptions.index') }}"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-all">
+                <span>📋</span><span class="font-semibold text-sm">Prescriptions Log</span>
+            </a>
+            <div class="pt-4 pb-2 border-t border-slate-800 my-2">
+                <span class="px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Registry</span>
+            </div>
+            <a href="#"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-all">
+                <span>👤</span><span class="font-semibold text-sm">Register Patient</span>
+            </a>
+            <a href="#"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-all">
+                <span>👥</span><span class="font-semibold text-sm">View All Patients</span>
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800 text-[11px] font-medium text-slate-500 text-center tracking-wide">
+            {{ $doctor->doctors_name }}
+        </div>
+    </aside>
+
+    {{-- ══════════════════════════════════════════════════════════
+     MAIN WORKSPACE
+══════════════════════════════════════════════════════════ --}}
+    <main class="flex-1 pl-64 min-w-0 no-print" id="workspace-main-panel">
+        <div class="p-8 max-w-[1600px] mx-auto">
+
+            {{-- Active Patient Banner --}}
+            <div onclick="openModal('patient-session-modal')"
+                class="bg-white border border-slate-200/80 rounded-2xl p-5 mb-8 flex justify-between items-center shadow-sm hover:shadow-[0_4px_25px_-3px_rgba(79,70,229,0.15)] hover:border-indigo-300 transition-all cursor-pointer group">
+                <div class="flex items-center space-x-6">
+                    <div
+                        class="h-12 w-12 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white rounded-xl flex items-center justify-center text-xl transition-colors">
+                        👤</div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-0.5 group-hover:text-indigo-500 transition-colors">Active
+                            Consultation (Click to Change/Add)</label>
+                        <span
+                            class="text-lg font-extrabold text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors"
+                            id="current-patient-label">— Select Patient —</span>
+                    </div>
+                    <div class="border-l border-slate-200 pl-6 h-8 flex items-center">
+                        <span
+                            class="text-sm text-slate-600 font-semibold bg-slate-100 group-hover:bg-indigo-50 group-hover:text-indigo-700 px-4 py-1 rounded-full transition-colors"
+                            id="current-patient-meta">—</span>
+                    </div>
+                    <div class="border-l border-slate-200 pl-6 h-8 flex items-center hidden md:flex">
+                        <span class="text-xs text-slate-400 font-mono tracking-wider">📅 Date:
+                            {{ date('d M, Y') }}</span>
+                    </div>
+                </div>
+                <div
+                    class="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-2 rounded-xl border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    Manage Patients ⚙️
+                </div>
+            </div>
+
+            <div class="grid grid-cols-12 gap-8 items-start">
+
+                {{-- ── LEFT PANEL: Treatment Templates + Module Buttons ── --}}
+                <div class="col-span-12 lg:col-span-4 space-y-4">
+
+                    {{-- Treatment Plan Templates --}}
+                    <div class="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-sm">
+                        <h3
+                            class="text-xs font-black uppercase tracking-widest text-indigo-600 mb-3 flex items-center space-x-1">
+                            <span>⚡</span><span>Treatment Plan Templates</span>
+                        </h3>
+                        <div class="mb-4">
+                            <input type="text" oninput="filterTreatmentTemplatesList(this.value)"
+                                placeholder="🔍 Search template packages..."
+                                class="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold bg-slate-50 outline-none focus:bg-white focus:border-indigo-500 transition-all shadow-sm">
+                        </div>
+                        <div id="ui-templates-container"
+                            class="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-1">
+                            {{-- JS will populate templates; static ones can be added here --}}
+                            <div class="template-wrapper-item" data-title="standard fever flu protocol">
+                                <button type="button" onclick="loadTreatmentTemplate('fever_pack')"
+                                    class="w-full text-left text-xs font-bold px-4 py-3 bg-indigo-50/50 hover:bg-indigo-600 text-indigo-950 hover:text-white border border-indigo-100/80 rounded-xl transition-all flex items-center justify-between group shadow-sm active:scale-95">
+                                    <span>HN-01: Standard Fever &amp; Flu</span>
+                                    <span
+                                        class="text-[10px] bg-white text-indigo-600 group-hover:bg-indigo-700 group-hover:text-white px-2 py-0.5 rounded border border-indigo-100 shrink-0 ml-2">Load</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Prescription Modules --}}
+                    <div class="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-sm">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-3 px-1">Prescription
+                            Modules</h3>
+
+                        <button type="button" onclick="openModal('complaints-modal')"
+                            class="w-full flex justify-between items-center bg-white border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 p-4 rounded-xl font-bold text-sm text-slate-700 transition-all group shadow-sm mb-2.5">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-amber-50 rounded-lg text-amber-600">🤢</span><span>Patient
+                                    Complaints</span></div>
+                            <span
+                                class="text-indigo-500 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+
+                        <button type="button" onclick="openModal('examination-modal')"
+                            class="w-full flex justify-between items-center bg-white border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 p-4 rounded-xl font-bold text-sm text-slate-700 transition-all group shadow-sm mb-2.5">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-blue-50 rounded-lg text-blue-600">🩺</span><span>On Examination</span>
+                            </div>
+                            <span
+                                class="text-indigo-500 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+
+                        <button type="button" onclick="openModal('diagnosis-modal')"
+                            class="w-full flex justify-between items-center bg-white border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 p-4 rounded-xl font-bold text-sm text-slate-700 transition-all group shadow-sm mb-2.5">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-rose-50 rounded-lg text-rose-600">🎯</span><span>Diagnosis /
+                                    Impressions</span></div>
+                            <span
+                                class="text-indigo-500 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+
+                        <button type="button" onclick="openModal('investigation-modal')"
+                            class="w-full flex justify-between items-center bg-white border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 p-4 rounded-xl font-bold text-sm text-slate-700 transition-all group shadow-sm mb-2.5">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-purple-50 rounded-lg text-purple-600">🔬</span><span>Investigations
+                                    &amp; Tests</span></div>
+                            <span
+                                class="text-indigo-500 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+
+                        <button type="button" onclick="openModal('medicine-modal')"
+                            class="w-full flex justify-between items-center bg-gradient-to-r from-indigo-900 to-slate-900 hover:from-indigo-950 hover:to-black p-4 rounded-xl font-bold text-sm text-white transition-all group shadow-md mb-2.5">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-white/10 rounded-lg text-indigo-300">💊</span><span
+                                    class="tracking-wide">Rₓ Medication Plan</span></div>
+                            <span
+                                class="bg-white/20 group-hover:bg-emerald-500 h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+
+                        <button type="button" onclick="openModal('advice-modal')"
+                            class="w-full flex justify-between items-center bg-white border border-slate-100 hover:border-indigo-500 hover:bg-indigo-50/20 p-4 rounded-xl font-bold text-sm text-slate-700 transition-all group shadow-sm">
+                            <div class="flex items-center space-x-3"><span
+                                    class="p-2 bg-emerald-50 rounded-lg text-emerald-600">🍏</span><span>Advices &amp;
+                                    Diet Plans</span></div>
+                            <span
+                                class="text-indigo-500 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white h-6 w-6 rounded-md flex items-center justify-center font-bold">⊕</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- ── RIGHT PANEL: Live Prescription Canvas ── --}}
+                <div
+                    class="col-span-12 lg:col-span-8 bg-white border border-slate-200/60 rounded-3xl p-10 min-h-[750px] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] flex flex-col justify-between relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 left-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+                    </div>
+                    <div>
+                        {{-- Doctor Header --}}
+                        <div class="flex justify-between items-start border-b border-slate-100 pb-6 mb-8">
+                            <div>
+                                <h2 class="text-xl font-black text-slate-900 tracking-tight">
+                                    {{ strtoupper($doctor->doctors_name) }}</h2>
+                                <p class="text-[10px] uppercase font-bold tracking-widest text-slate-400 mt-0.5">
+                                    {{ $doctor->doctors_designations ?? '' }}</p>
+                                <p class="text-[10px] text-slate-400 font-semibold">
+                                    {{ $doctor->doctors_speciality ?? '' }}</p>
+                                <p class="text-[10px] text-slate-300 font-medium">BMDC Reg:
+                                    {{ $doctor->doctor_bmdc_registration_number ?? '' }}</p>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-400 font-medium leading-relaxed">
+                                <p class="font-bold text-slate-700">{{ $doctor->doctors_department ?? '' }}</p>
+                                <p>{{ $doctor->doctors_address ?? '' }}</p>
+                            </div>
+                        </div>
+
+                        {{-- Patient Info (live-updated by JS) --}}
+                        <div
+                            class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs grid grid-cols-2 gap-2 mb-6">
+                            <p><strong>Patient Name:</strong> <span id="canvas-pt-name"
+                                    class="text-slate-900 font-bold">—</span></p>
+                            <p><strong>Demographics:</strong> <span id="canvas-pt-meta"
+                                    class="text-slate-900 font-medium">—</span></p>
+                        </div>
+
+                        <div class="mb-6">
+                            <span
+                                class="text-4xl font-serif font-black bg-gradient-to-br from-indigo-600 to-indigo-900 bg-clip-text text-transparent select-none">Rₓ</span>
+                        </div>
+
+                        {{-- Live clinical columns --}}
+                        <div class="grid grid-cols-12 gap-6 items-start">
+                            <div class="col-span-4 space-y-6 border-r border-slate-100 pr-4 min-h-[400px]">
+                                <div id="live-section-complaints" class="hidden py-0.5">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                                        Complaints</h4>
+                                    <div id="render-complaints-target"
+                                        class="text-slate-800 space-y-1 font-semibold text-xs"></div>
+                                </div>
+                                <div id="live-section-diagnosis" class="hidden py-0.5">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-rose-500 mb-1.5">
+                                        Diagnosis</h4>
+                                    <div id="render-diagnosis-target"
+                                        class="text-slate-900 space-y-1 font-extrabold text-xs leading-normal italic">
+                                    </div>
+                                </div>
+                                <div id="live-section-examination" class="hidden py-0.5">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                                        On Examination</h4>
+                                    <div id="render-examination-target"
+                                        class="text-slate-800 flex flex-col gap-1 text-xs font-bold"></div>
+                                </div>
+                                <div id="live-section-investigation" class="hidden py-0.5">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-purple-400 mb-1.5">
+                                        Investigations / Tests</h4>
+                                    <div id="render-investigation-target"
+                                        class="text-slate-800 space-y-1 font-bold text-xs leading-normal"></div>
+                                </div>
+                            </div>
+                            <div class="col-span-8 pl-2 space-y-6">
+                                <div id="live-section-medication" class="hidden py-0.5">
+                                    <ol id="render-medication-target"
+                                        class="list-decimal pl-4 font-bold space-y-4 text-slate-900 text-sm"></ol>
+                                </div>
+                                <div id="med-blank-canvas-notice" class="text-slate-300 italic text-xs pl-2 pt-2">No
+                                    active medications compiled...</div>
+                                <div id="live-section-advice"
+                                    class="hidden py-0.5 border-t border-dashed border-slate-200 pt-4">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                                        Therapeutic Instructions</h4>
+                                    <ul id="render-advice-target"
+                                        class="list-disc pl-4 text-slate-700 font-medium space-y-1.5 text-xs"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Save as Template --}}
+                    <div
+                        class="mt-12 bg-slate-50 p-4 border border-slate-200/60 rounded-2xl flex flex-col sm:flex-row gap-3 justify-between items-center shadow-inner">
+                        <div class="w-full sm:flex-1">
+                            <label
+                                class="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Save
+                                Active Configuration Layout</label>
+                            <input type="text" id="custom-template-title-input"
+                                placeholder="e.g., Diabetes Pack, Gastric Routine..."
+                                class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold bg-white outline-none focus:border-indigo-500 shadow-sm">
+                        </div>
+                        <button type="button" onclick="createNewTreatmentTemplateFromUI()"
+                            class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 shrink-0 sm:mt-4">
+                            Save as Template 💾
+                        </button>
+                    </div>
+
+                    {{-- Action Buttons --}}
+                    <div class="border-t border-slate-100 pt-6 flex justify-end space-x-3 mt-6">
+                        <button type="button" id="btn-save-record" onclick="commitPrescriptionToDatabase(this)"
+                            class="px-6 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 transition-all uppercase tracking-wider shadow-sm">
+                            Save Record 💾
+                        </button>
+                        <button type="button" onclick="routeToPrintPrescriptionPage()"
+                            class="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black hover:from-emerald-700 hover:to-teal-700 transition-all uppercase tracking-widest shadow-md hover:shadow-lg active:scale-95">
+                            Print + Finalize Document 🖨️
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    {{-- ══════════════════════════════════════════════════════════
+     PRINT VIEW  (11 × 8 in landscape)
+══════════════════════════════════════════════════════════ --}}
+    <div id="print-prescription-view"
+        class="hidden min-h-screen w-full bg-white flex flex-col items-center justify-start p-10 relative">
+        <div
+            class="w-full max-w-[11in] flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl shadow-xl mb-8 no-print animate-fade-in">
+            <div class="flex items-center space-x-3">
+                <span class="text-xl">📄</span>
+                <div>
+                    <h3 class="text-sm font-black tracking-tight">Prescription Output – Print Preview</h3>
+                    <p class="text-[10px] text-slate-400 font-mono">Format: 11in × 8in Landscape</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button type="button" onclick="exitPrintPrescriptionView()"
+                    class="px-4 py-2 border border-slate-700 text-xs font-bold rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition-all">
+                    ← Return to Editor
+                </button>
+                <button type="button" onclick="window.print()"
+                    class="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md active:scale-95">
+                    Execute Print 🖨️
+                </button>
+            </div>
+        </div>
+
+        <div id="print-prescription-viewport"
+            class="w-[11in] h-[8in] bg-white border border-slate-300 p-[0.5in] flex flex-col justify-between relative text-black leading-normal">
+            <div>
+                {{-- Print Header --}}
+                <div class="flex justify-between items-start border-b-4 border-slate-900 pb-4 mb-4">
+                    <div>
+                        <h2 class="text-2xl font-black tracking-tight">{{ strtoupper($doctor->doctors_name) }}</h2>
+                        <p class="text-[11px] font-bold text-slate-700 mt-0.5 font-mono">
+                            {{ $doctor->doctors_designations ?? '' }}</p>
+                        <p class="text-[10px] font-bold text-slate-500">{{ $doctor->doctors_speciality ?? '' }}</p>
+                        <p class="text-[10px] text-slate-400 font-semibold font-mono">
+                            {{ $doctor->doctors_department ?? '' }}</p>
+                    </div>
+                    <div class="text-right text-[11px] font-medium leading-relaxed space-y-0.5">
+                        <p class="font-extrabold text-sm text-slate-950">{{ $doctor->doctors_address ?? '' }}</p>
+                        <p class="text-slate-400 font-mono text-[10px]">{{ $doctor->doctors_phone_number ?? '' }}</p>
+                    </div>
+                </div>
+
+                {{-- Print Patient Strip --}}
+                <div
+                    class="border-2 border-slate-900 bg-slate-900 text-white px-4 py-2 rounded-lg grid grid-cols-4 gap-4 text-xs font-bold tracking-wide mb-6">
+                    <p>Name: <span id="print-target-name"
+                            class="font-normal underline decoration-slate-400 ml-1">—</span></p>
+                    <p>Age: <span id="print-target-age" class="font-normal ml-1">—</span></p>
+                    <p>Sex: <span id="print-target-gender" class="font-normal ml-1">—</span></p>
+                    <p class="text-right">Date: <span id="print-target-date"
+                            class="font-mono font-normal ml-1">{{ date('Y-m-d') }}</span></p>
+                </div>
+
+                {{-- Print Clinical Columns --}}
+                <div class="grid grid-cols-12 gap-6 items-start">
+                    <div class="col-span-4 space-y-6 border-r-2 border-slate-900 pr-4 min-h-[4.5in]">
+                        <div id="print-block-complaints">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-500 mb-1 font-mono">C/C:
+                            </h4>
+                            <div id="print-target-complaints" class="text-xs space-y-1 font-bold pl-2"></div>
+                        </div>
+                        <div id="print-block-diagnosis" class="hidden">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-500 mb-1 font-mono">
+                                Provisional Dx:</h4>
+                            <div id="print-target-diagnosis" class="text-xs space-y-1 font-black italic pl-2"></div>
+                        </div>
+                        <div id="print-block-examination">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-500 mb-1 font-mono">O/E:
+                            </h4>
+                            <div id="print-target-examination" class="text-xs flex flex-col gap-1 font-bold pl-2">
+                            </div>
+                        </div>
+                        <div id="print-block-investigation" class="hidden">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-500 mb-1 font-mono">
+                                Investigations:</h4>
+                            <div id="print-target-investigation" class="text-xs space-y-1 font-bold pl-2"></div>
+                        </div>
+                    </div>
+                    <div class="col-span-8 pl-4 space-y-6">
+                        <div>
+                            <span
+                                class="text-4xl font-serif font-black text-slate-950 block mb-4 select-none">Rₓ</span>
+                            <ol id="print-target-medication"
+                                class="list-decimal pl-5 font-bold space-y-4 text-slate-950 text-sm leading-normal">
+                            </ol>
+                        </div>
+                        <div id="print-block-advice" class="hidden border-t-2 border-dashed border-slate-300 pt-4">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-500 mb-2 font-mono">Adv:
+                            </h4>
+                            <ul id="print-target-advice"
+                                class="list-disc pl-5 text-slate-800 font-bold space-y-1 text-xs"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="border-t-2 border-slate-900 pt-4 flex justify-between items-end text-[10px] font-mono tracking-wide text-slate-500">
+                <div>AUTH-{{ time() }}</div>
+                <div
+                    class="border-t border-slate-400 pt-4 w-44 text-center font-sans font-bold text-slate-700 text-xs">
+                    Medical Practitioner Stamp</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════ --}}
+    <div class="no-print">
+
+        {{-- ── Patient Session Modal ── --}}
+        <div id="patient-session-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('patient-session-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl grid grid-cols-1 md:grid-cols-12 overflow-hidden border border-slate-100 max-h-[85vh]">
+
+                {{-- Register new patient --}}
+                <div class="md:col-span-5 bg-slate-50/80 p-6 border-r border-slate-100 overflow-y-auto">
+                    <h3
+                        class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center space-x-2 mb-4 text-indigo-900">
+                        <span>✨</span><span>Register New Patient</span>
+                    </h3>
+                    <form id="quick-patient-form" class="space-y-4" onsubmit="event.preventDefault()">
+                        <div>
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Full
+                                Legal Name</label>
+                            <input type="text" id="new-pt-name" placeholder="e.g. Md Ariful Islam"
+                                class="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 shadow-sm bg-white"
+                                required>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label
+                                    class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Age
+                                    (Years)</label>
+                                <input type="number" id="new-pt-age" placeholder="25"
+                                    class="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 shadow-sm bg-white"
+                                    required>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Gender</label>
+                                <select id="new-pt-gender"
+                                    class="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none focus:border-indigo-500 shadow-sm bg-white cursor-pointer">
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">Phone
+                                Number</label>
+                            <input type="text" id="new-pt-phone" placeholder="01700000000"
+                                class="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:border-indigo-500 shadow-sm bg-white">
+                        </div>
+                        <button type="button" onclick="registerQuickPatient()"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl text-xs uppercase tracking-widest shadow-md transition-all active:scale-95">
+                            Save &amp; Activate Profile
+                        </button>
+                    </form>
+                </div>
+
+                {{-- Switch patient from DB list --}}
+                <div class="md:col-span-7 p-6 flex flex-col bg-white overflow-hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-black text-slate-900 text-sm uppercase tracking-wider text-slate-400">Switch
+                            Patient Profile</h3>
+                        <button type="button" onclick="closeModal('patient-session-modal')"
+                            class="text-slate-400 hover:text-slate-600 font-bold text-sm h-6 w-6 rounded-full hover:bg-slate-100 flex items-center justify-center">✕</button>
+                    </div>
+                    <input type="text" oninput="filterPatientList(this.value)"
+                        placeholder="🔍 Search current patient registry..."
+                        class="w-full border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 outline-none focus:bg-white focus:border-indigo-500 font-medium transition-all mb-4">
+                    <div id="patient-ledger-list" class="flex-1 overflow-y-auto space-y-2 pr-1">
+                        {{-- ✅ Populated from DB via $patients --}}
+                        @forelse($patients as $pt)
+                            <div onclick="setActivePatient('{{ $pt->patient_name }}', '{{ $pt->patient_age }}', '{{ $pt->patient_gender }}', '{{ $pt->patient_phone_number }}')"
+                                class="patient-ledger-card p-3 border border-slate-100 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl flex justify-between items-center cursor-pointer hover:border-indigo-400 transition-all">
+                                <div>
+                                    <h4 class="text-xs font-bold text-slate-900 name-field">{{ $pt->patient_name }}
+                                    </h4>
+                                    <p class="text-[10px] text-slate-400 font-medium">Age: {{ $pt->patient_age }} •
+                                        {{ $pt->patient_gender }}{{ $pt->patient_phone_number ? ' • ' . $pt->patient_phone_number : '' }}
+                                    </p>
+                                </div>
+                                <span class="text-[10px] text-slate-400 font-bold">Select</span>
+                            </div>
+                        @empty
+                            <p class="text-xs text-slate-400 text-center py-8">No patients registered yet.</p>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Complaints Modal ── --}}
+        <div id="complaints-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('complaints-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>🤢</span><span>Select Patient Complaints</span></h3>
+                    <button type="button" onclick="closeModal('complaints-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="p-4 border-b border-slate-100 bg-white">
+                    <input type="text" oninput="filterBadgeGrid('complaints-badge-grid', this.value)"
+                        placeholder="Search complaints..."
+                        class="w-full border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 outline-none focus:bg-white focus:border-indigo-500 font-medium transition-all">
+                </div>
+                <div class="p-6 overflow-y-auto space-y-6 flex-1 bg-white">
+                    <div id="complaints-badge-grid" class="flex flex-wrap gap-2">
+                        {{-- ✅ From DB --}}
+                        @foreach ($complaints as $c)
+                            <button type="button" onclick="selectComplaintTag(this, '{{ $c->complaint_name }}')"
+                                class="badge-btn bg-slate-50 hover:bg-indigo-600 border border-slate-200/60 text-slate-700 hover:text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all cursor-pointer select-none shadow-sm">
+                                {{ $c->complaint_name }}
+                            </button>
+                        @endforeach
+                    </div>
+                    <div id="complaint-duration-builder"
+                        class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-3 shadow-inner">
+                        <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Duration for:
+                            <span id="active-complaint-label"
+                                class="text-indigo-600 underline font-extrabold ml-1"></span>
+                        </span>
+                        <input type="text" id="complaint-duration-input" placeholder="e.g. 3 days"
+                            class="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl bg-white shadow-sm outline-none">
+                        <div class="flex flex-wrap gap-1.5 pt-1">
+                            @foreach (['3 days', '5 days', '7 days', '10 days', '1 month', 'চলবে'] as $d)
+                                <button type="button" onclick="appendDurationValue('{{ $d }}')"
+                                    class="bg-white hover:bg-slate-900 border border-slate-200 text-slate-800 hover:text-white text-[11px] font-bold px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95">{{ $d }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+                <div
+                    class="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex w-full sm:w-auto gap-2">
+                        <input type="text" id="custom-complaint-input" placeholder="Add Custom Complaint..."
+                            class="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-indigo-500 font-medium shadow-sm w-full sm:w-56">
+                        <button type="button" onclick="appendCustomComplaintTag()"
+                            class="bg-slate-900 hover:bg-black text-white px-3 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shrink-0">+
+                            Add Tag</button>
+                    </div>
+                    <div class="flex space-x-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="closeModal('complaints-modal')"
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                        <button type="button" onclick="saveComplaintsPipeline()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Apply
+                            Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Examination Modal ── --}}
+        <div id="examination-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('examination-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>🩺</span><span>On Examination Diagnostics</span></h3>
+                    <button type="button" onclick="closeModal('examination-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 space-y-6 bg-white">
+                    <div id="examination-badge-grid" class="flex flex-wrap gap-2">
+                        {{-- ✅ From DB --}}
+                        @foreach ($examinations as $ex)
+                            <button type="button"
+                                onclick="selectExaminationTag(this, '{{ $ex->examination_name }}')"
+                                class="badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all hover:bg-indigo-600 hover:text-white shadow-sm cursor-pointer select-none">
+                                {{ $ex->examination_name }}
+                            </button>
+                        @endforeach
+                    </div>
+                    <div id="exam-value-builder"
+                        class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-3 shadow-inner">
+                        <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Value for:
+                            <span id="active-exam-label" class="text-indigo-600 underline font-extrabold ml-1"></span>
+                        </span>
+                        <input type="text" id="exam-value-input"
+                            class="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl bg-white shadow-sm outline-none"
+                            placeholder="e.g. 120/70">
+                        <div id="examination-metrics-grid" class="flex flex-wrap gap-1.5">
+                            @foreach (['120/70', '130/80', '98.6°F', '80 bpm', 'Normal', 'Elevated'] as $m)
+                                <button type="button" onclick="appendExamMetric('{{ $m }}')"
+                                    class="bg-white hover:bg-slate-900 border border-slate-200 text-slate-800 hover:text-white text-[11px] font-bold px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95">{{ $m }}</button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+                <div
+                    class="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <input type="text" id="custom-exam-name" placeholder="New Exam Name..."
+                            class="border border-slate-200 rounded-xl px-2.5 py-2 text-xs bg-white outline-none font-medium shadow-sm w-36">
+                        <button type="button" onclick="appendCustomExamTag()"
+                            class="bg-slate-900 hover:bg-black text-white px-2.5 py-2 text-xs font-bold rounded-xl shadow transition-all active:scale-95 shrink-0">+
+                            Exam</button>
+                    </div>
+                    <div class="flex space-x-2 w-full sm:w-auto justify-end">
+                        <button type="button" onclick="closeModal('examination-modal')"
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                        <button type="button" onclick="saveExaminationPipeline()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Apply
+                            Data</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Diagnosis Modal ── --}}
+        <div id="diagnosis-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('diagnosis-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>🎯</span><span>Select Clinical Diagnosis</span></h3>
+                    <button type="button" onclick="closeModal('diagnosis-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 bg-white">
+                    <div id="diagnosis-badge-grid" class="flex flex-wrap gap-2">
+                        {{-- ✅ From DB --}}
+                        @foreach ($diagnoses as $diag)
+                            <button type="button" onclick="toggleDiagnosisTag(this, '{{ $diag->diagnosis_name }}')"
+                                class="badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl transition-all duration-150 hover:bg-slate-100 shadow-sm cursor-pointer select-none">
+                                {{ $diag->diagnosis_name }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+                <div
+                    class="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="custom-diagnosis-input" placeholder="Type Diagnosis..."
+                            class="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none font-medium shadow-sm w-64">
+                        <button type="button" onclick="appendCustomDiagnosisTag()"
+                            class="bg-slate-900 hover:bg-black text-white px-3 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shrink-0">+
+                            Diagnosis</button>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="closeModal('diagnosis-modal')"
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                        <button type="button" onclick="saveDiagnosisPipeline()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Apply
+                            Diagnosis</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Investigation Modal ── --}}
+        <div id="investigation-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('investigation-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>🔬</span><span>Select Investigations &amp; Lab Tests</span></h3>
+                    <button type="button" onclick="closeModal('investigation-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 space-y-6 bg-white">
+                    <div id="investigation-badge-grid" class="flex flex-wrap gap-2">
+                        {{-- ✅ From DB --}}
+                        @foreach ($investigations as $inv)
+                            <button type="button"
+                                onclick="selectInvestigationTag(this, '{{ $inv->investigation_name }}')"
+                                class="badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all hover:bg-purple-600 hover:text-white shadow-sm cursor-pointer select-none">
+                                {{ $inv->investigation_name }}
+                            </button>
+                        @endforeach
+                    </div>
+                    <div id="investigation-result-builder"
+                        class="hidden bg-slate-50/80 p-5 rounded-2xl border border-slate-200/80 space-y-3 shadow-inner">
+                        <span class="text-xs font-black text-slate-500 uppercase tracking-wider">Result for:
+                            <span id="active-investigation-label"
+                                class="text-purple-600 underline font-extrabold ml-1"></span>
+                        </span>
+                        <input type="text" id="investigation-result-input"
+                            class="w-full border border-slate-200 p-3 text-xs font-bold rounded-xl bg-white shadow-sm outline-none"
+                            placeholder="e.g. High / 7.2 mg/dL">
+                    </div>
+                </div>
+                <div
+                    class="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="custom-investigation-input" placeholder="Add Test Name..."
+                            class="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none font-medium shadow-sm w-64">
+                        <button type="button" onclick="appendCustomInvestigationTag()"
+                            class="bg-slate-900 hover:bg-black text-white px-3 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shrink-0">+
+                            Add Test</button>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="closeModal('investigation-modal')"
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                        <button type="button" onclick="saveInvestigationPipeline()"
+                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Apply
+                            Test</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Medicine Modal ── --}}
+        <div id="medicine-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('medicine-modal')">
+            <div
+                class="bg-white w-full max-w-5xl rounded-3xl shadow-2xl flex flex-col h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>💊</span><span>Rₓ Medication Scheduler</span></h3>
+                    <button type="button" onclick="closeModal('medicine-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="grid grid-cols-12 flex-1 overflow-hidden">
+                    {{-- Medicine catalog (left) --}}
+                    <div
+                        class="col-span-12 md:col-span-5 border-r border-slate-100 p-5 overflow-y-auto bg-slate-50/60 flex flex-col justify-between">
+                        <div class="space-y-3 flex-1 overflow-y-auto">
+                            <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Medicine
+                                Catalog</h4>
+                            <input type="text" oninput="filterMedicineCatalog(this.value)"
+                                placeholder="🔍 Search medicine..."
+                                class="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none font-medium shadow-sm focus:border-indigo-400">
+                            <div id="medicine-catalog-list" class="flex flex-col space-y-1.5 pr-1">
+                                {{-- ✅ From DB --}}
+                                @foreach ($medicines as $med)
+                                    <button type="button"
+                                        onclick="stageMedicineItem(this, '{{ addslashes($med->medicine_name) }}')"
+                                        data-medname="{{ strtolower($med->medicine_name) }}"
+                                        class="med-catalog-btn text-left text-xs text-indigo-600 hover:text-indigo-950 font-semibold py-2.5 px-3 bg-white hover:bg-indigo-50/50 rounded-xl border border-slate-100 shadow-sm transition-all flex items-center space-x-2">
+                                        <span>🗂️</span>
+                                        <span>{{ $med->medicine_name }}</span>
+                                        @if ($med->medicine_power)
+                                            <span
+                                                class="text-[10px] text-slate-400 ml-auto">{{ $med->medicine_power }}</span>
+                                        @endif
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-slate-200/80 mt-4 bg-white -mx-5 -mb-5 p-4 space-y-2">
+                            <input type="text" id="custom-medicine-name" placeholder="Form, Molecule..."
+                                class="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-slate-50 outline-none w-full">
+                            <button type="button" onclick="appendCustomMedicineCatalog()"
+                                class="w-full bg-slate-900 text-white py-2 text-xs font-bold rounded-xl shadow">Add
+                                custom</button>
+                        </div>
+                    </div>
+
+                    {{-- Dose scheduler (right) --}}
+                    <div
+                        class="col-span-12 md:col-span-7 p-6 overflow-y-auto space-y-6 bg-white flex flex-col justify-center">
+                        <div id="med-scheduler-panel" class="hidden space-y-5">
+                            <h3 class="text-lg font-black text-slate-900 border-b border-slate-100 pb-3"
+                                id="scheduled-med-title">—</h3>
+                            <div class="space-y-2">
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Interval
+                                    Schedule</label>
+                                <div
+                                    class="grid grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/60 shadow-inner">
+                                    <label
+                                        class="flex flex-col items-center p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold cursor-pointer select-none"><input
+                                            type="checkbox" id="check-morn" checked class="mb-1.5">সকাল</label>
+                                    <label
+                                        class="flex flex-col items-center p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold cursor-pointer select-none"><input
+                                            type="checkbox" id="check-noon" checked class="mb-1.5">দুপুর</label>
+                                    <label
+                                        class="flex flex-col items-center p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold cursor-pointer select-none"><input
+                                            type="checkbox" id="check-night" checked class="mb-1.5">রাত</label>
+                                    <label
+                                        class="flex flex-col items-center p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold cursor-pointer select-none"><input
+                                            type="checkbox" id="check-eve" class="mb-1.5">বিকাল</label>
+                                </div>
+                                <div class="grid grid-cols-4 gap-3">
+                                    <input type="text" id="dose-qty-1" value="0"
+                                        class="border text-center p-3 rounded-xl text-xs bg-slate-50">
+                                    <input type="text" id="dose-qty-2" value="0"
+                                        class="border text-center p-3 rounded-xl text-xs bg-slate-50">
+                                    <input type="text" id="dose-qty-3" value="1"
+                                        class="border text-center p-3 rounded-xl text-xs bg-slate-50">
+                                    <input type="text" id="dose-qty-4" value="0"
+                                        class="border text-center p-3 rounded-xl text-xs bg-slate-50">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label
+                                        class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Meal
+                                        Relation</label>
+                                    <select id="med-timing-select"
+                                        class="w-full border p-3 text-xs font-bold rounded-xl bg-slate-50">
+                                        <option value="খাবারের পরে">খাবারের পরে (After Food)</option>
+                                        <option value="খাবারের আগে">খাবারের আগে (Before Food)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label
+                                        class="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Duration</label>
+                                    <input type="text" id="med-duration-input" value="চলবে"
+                                        class="w-full border p-3 text-xs font-bold rounded-xl bg-slate-50">
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <label
+                                    class="block text-[10px] font-black text-slate-400 uppercase tracking-wider">Custom
+                                    Instructions</label>
+                                <input type="text" id="med-instruction-input"
+                                    class="w-full border border-slate-200 p-3 text-xs font-semibold rounded-xl outline-none shadow-sm"
+                                    placeholder="e.g. জ্বর থাকলে">
+                            </div>
+                            <button type="button" onclick="commitMedicineToStack()"
+                                class="w-full bg-slate-900 text-white font-black py-3.5 rounded-xl text-xs uppercase tracking-widest shadow-md">Add
+                                Entry to Plan</button>
+                        </div>
+                        <div id="med-placeholder-notice"
+                            class="text-center py-20 text-slate-400 italic text-xs space-y-2">
+                            <div class="text-3xl">📥</div>
+                            <p class="font-medium text-slate-400">Select a medicine from the catalog.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-end space-x-2">
+                    <button type="button" onclick="closeModal('medicine-modal')"
+                        class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                    <button type="button" onclick="closeModal('medicine-modal')"
+                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Done</button>
+                </div>
+            </div>
+        </div>
+
+        {{-- ── Advice Modal ── --}}
+        <div id="advice-modal"
+            class="hidden fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-md flex items-center justify-center p-4"
+            onclick="if(event.target===this) closeModal('advice-modal')">
+            <div
+                class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden border border-slate-100">
+                <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-extrabold text-slate-900 text-base flex items-center space-x-2">
+                        <span>🍏</span><span>Select Dietary &amp; Care Advices</span></h3>
+                    <button type="button" onclick="closeModal('advice-modal')"
+                        class="text-slate-400 hover:text-slate-600 h-8 w-8 rounded-full hover:bg-slate-100 flex items-center justify-center font-bold">✕</button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 bg-white">
+                    <div id="advices-badge-grid" class="flex flex-wrap gap-2.5">
+                        {{-- ✅ From DB --}}
+                        @foreach ($advices as $adv)
+                            <button type="button" onclick="toggleAdviceTag(this, '{{ $adv->advice_name }}')"
+                                class="badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl transition-all duration-150 select-none shadow-sm">
+                                {{ $adv->advice_name }}
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+                <div
+                    class="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="custom-advice-input" placeholder="Type Custom Care Advice..."
+                            class="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none font-medium shadow-sm w-72">
+                        <button type="button" onclick="appendCustomAdviceTag()"
+                            class="bg-slate-900 hover:bg-black text-white px-3 py-2 text-xs font-bold rounded-xl transition-all active:scale-95 shadow-sm shrink-0">+
+                            Add</button>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="closeModal('advice-modal')"
+                            class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-xs uppercase">Cancel</button>
+                        <button type="button" onclick="saveAdvicePipeline()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs uppercase shadow-md">Apply
+                            Advice</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>{{-- end .no-print --}}
+
+    {{-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════ --}}
+    <script>
+        // ── State ──────────────────────────────────────────────────────────
+        let selectedComplaints = []; // [{name, duration}]
+        let selectedExaminations = []; // [{name, value}]
+        let selectedInvestigations = []; // [{name, result}]
+        let selectedMedicines = []; // [{name, dosage, timing, duration, instruction}]
+        let selectedAdvices = []; // [string]
+        let selectedDiagnoses = []; // [string]
+        let currentTargetTag = '';
+
+        let currentPatient = {
+            name: '',
+            age: '',
+            gender: '',
+            phone: ''
+        };
+
+        // ── Modal helpers ──────────────────────────────────────────────────
+        function openModal(id) {
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // ── Generic badge-grid search ──────────────────────────────────────
+        function filterBadgeGrid(gridId, query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll(`#${gridId} button`).forEach(btn => {
+                btn.classList.toggle('hidden', !btn.textContent.toLowerCase().includes(q));
+            });
+        }
+
+        // ── Medicine catalog search ────────────────────────────────────────
+        function filterMedicineCatalog(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.med-catalog-btn').forEach(btn => {
+                btn.classList.toggle('hidden', !btn.dataset.medname.includes(q));
+            });
+        }
+
+        // ── Patient management ─────────────────────────────────────────────
+        function setActivePatient(name, age, gender, phone) {
+            currentPatient = {
+                name,
+                age,
+                gender,
+                phone: phone || ''
+            };
+            document.getElementById('current-patient-label').innerText = name;
+            document.getElementById('current-patient-meta').innerText = `${age} Years | ${gender}`;
+            document.getElementById('canvas-pt-name').innerText = name;
+            document.getElementById('canvas-pt-meta').innerText = `${age} Years | ${gender}`;
+            closeModal('patient-session-modal');
+        }
+
+        function registerQuickPatient() {
+            const name = document.getElementById('new-pt-name').value.trim();
+            const age = document.getElementById('new-pt-age').value.trim();
+            const gender = document.getElementById('new-pt-gender').value;
+            const phone = document.getElementById('new-pt-phone').value.trim();
+            if (!name || !age) {
+                alert('Please enter name and age.');
+                return;
+            }
+
+            const cardHtml = `
+            <div onclick="setActivePatient('${name}','${age}','${gender}','${phone}')"
+                 class="patient-ledger-card p-3 border border-slate-100 bg-slate-50/50 hover:bg-indigo-50/20 rounded-xl flex justify-between items-center cursor-pointer hover:border-indigo-400 transition-all">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-900 name-field">${name}</h4>
+                    <p class="text-[10px] text-slate-400 font-medium">Age: ${age} • ${gender}${phone ? ' • '+phone : ''}</p>
+                </div>
+                <span class="text-[10px] text-slate-400 font-bold">Select</span>
+            </div>`;
+            document.getElementById('patient-ledger-list').insertAdjacentHTML('afterbegin', cardHtml);
+            setActivePatient(name, age, gender, phone);
+            document.getElementById('quick-patient-form').reset();
+        }
+
+        function filterPatientList(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.patient-ledger-card').forEach(card => {
+                card.classList.toggle('hidden', !card.querySelector('.name-field').innerText.toLowerCase().includes(
+                    q));
+            });
+        }
+
+        // ── Complaints ─────────────────────────────────────────────────────
+        function selectComplaintTag(btn, tag) {
+            btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('bg-indigo-600', 'text-white'));
+            btn.classList.add('bg-indigo-600', 'text-white');
+            currentTargetTag = tag;
+            document.getElementById('active-complaint-label').innerText = tag;
+            document.getElementById('complaint-duration-builder').classList.remove('hidden');
+        }
+
+        function appendDurationValue(val) {
+            document.getElementById('complaint-duration-input').value = val;
+        }
+
+        function appendCustomComplaintTag() {
+            const v = document.getElementById('custom-complaint-input').value.trim();
+            if (!v) return;
+            const grid = document.getElementById('complaints-badge-grid');
+            grid.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="selectComplaintTag(this,'${v}')" class="badge-btn bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all">${v}</button>`
+                );
+            document.getElementById('custom-complaint-input').value = '';
+            selectComplaintTag(grid.lastChild, v);
+        }
+
+        function saveComplaintsPipeline() {
+            const duration = document.getElementById('complaint-duration-input').value || '3 days';
+            if (currentTargetTag) {
+                selectedComplaints = selectedComplaints.filter(i => i.name !== currentTargetTag);
+                selectedComplaints.push({
+                    name: currentTargetTag,
+                    duration
+                });
+                renderComplaintsView();
+            }
+            document.getElementById('complaint-duration-builder').classList.add('hidden');
+            closeModal('complaints-modal');
+        }
+
+        function renderComplaintsView() {
+            const c = document.getElementById('render-complaints-target');
+            const s = document.getElementById('live-section-complaints');
+            c.innerHTML = '';
+            if (selectedComplaints.length > 0) {
+                s.classList.remove('hidden');
+                selectedComplaints.forEach(i => {
+                    c.innerHTML +=
+                        `<div class="font-bold text-slate-900 text-xs py-0.5">• ${i.name} (${i.duration})</div>`;
+                });
+            } else {
+                s.classList.add('hidden');
+            }
+        }
+
+        // ── Examinations ───────────────────────────────────────────────────
+        function selectExaminationTag(btn, tag) {
+            btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('bg-indigo-600', 'text-white'));
+            btn.classList.add('bg-indigo-600', 'text-white');
+            currentTargetTag = tag;
+            document.getElementById('active-exam-label').innerText = tag;
+            document.getElementById('exam-value-input').value = '';
+            document.getElementById('exam-value-builder').classList.remove('hidden');
+        }
+
+        function appendExamMetric(val) {
+            document.getElementById('exam-value-input').value = val;
+        }
+
+        function appendCustomExamTag() {
+            const v = document.getElementById('custom-exam-name').value.trim();
+            if (!v) return;
+            const grid = document.getElementById('examination-badge-grid');
+            grid.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="selectExaminationTag(this,'${v}')" class="badge-btn bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-sm">${v}</button>`
+                );
+            document.getElementById('custom-exam-name').value = '';
+            selectExaminationTag(grid.lastChild, v);
+        }
+
+        function saveExaminationPipeline() {
+            const val = document.getElementById('exam-value-input').value || 'Normal';
+            if (currentTargetTag) {
+                selectedExaminations = selectedExaminations.filter(i => i.name !== currentTargetTag);
+                selectedExaminations.push({
+                    name: currentTargetTag,
+                    value: val
+                });
+                renderExaminationView();
+            }
+            document.getElementById('exam-value-builder').classList.add('hidden');
+            closeModal('examination-modal');
+        }
+
+        function renderExaminationView() {
+            const c = document.getElementById('render-examination-target');
+            const s = document.getElementById('live-section-examination');
+            c.innerHTML = '';
+            if (selectedExaminations.length > 0) {
+                s.classList.remove('hidden');
+                selectedExaminations.forEach(i => {
+                    c.innerHTML +=
+                        `<div class="text-slate-800 py-0.5 text-xs font-bold">• ${i.name}: <span class="text-indigo-600">${i.value}</span></div>`;
+                });
+            } else {
+                s.classList.add('hidden');
+            }
+        }
+
+        // ── Diagnoses ──────────────────────────────────────────────────────
+        function toggleDiagnosisTag(btn, val) {
+            if (btn.classList.contains('bg-indigo-600')) {
+                btn.className =
+                    'badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl select-none';
+                selectedDiagnoses = selectedDiagnoses.filter(i => i !== val);
+            } else {
+                btn.className =
+                    'badge-btn bg-indigo-600 border border-indigo-600 text-white text-xs font-bold px-4 py-3 rounded-xl select-none';
+                selectedDiagnoses.push(val);
+            }
+        }
+
+        function appendCustomDiagnosisTag() {
+            const v = document.getElementById('custom-diagnosis-input').value.trim();
+            if (!v) return;
+            const grid = document.getElementById('diagnosis-badge-grid');
+            grid.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="toggleDiagnosisTag(this,'${v}')" class="badge-btn bg-indigo-600 border border-indigo-600 text-white text-xs font-bold px-4 py-3 rounded-xl">${v}</button>`
+                );
+            selectedDiagnoses.push(v);
+            document.getElementById('custom-diagnosis-input').value = '';
+        }
+
+        function saveDiagnosisPipeline() {
+            renderDiagnosisView();
+            closeModal('diagnosis-modal');
+        }
+
+        function renderDiagnosisView() {
+            const c = document.getElementById('render-diagnosis-target');
+            const s = document.getElementById('live-section-diagnosis');
+            c.innerHTML = '';
+            if (selectedDiagnoses.length > 0) {
+                s.classList.remove('hidden');
+                selectedDiagnoses.forEach(d => {
+                    c.innerHTML +=
+                        `<div class="text-slate-900 py-0.5 text-xs font-extrabold italic">• Provisional Dx: <span class="text-rose-600 font-black">${d}</span></div>`;
+                });
+            } else {
+                s.classList.add('hidden');
+            }
+        }
+
+        // ── Investigations ─────────────────────────────────────────────────
+        function selectInvestigationTag(btn, code) {
+            btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('bg-purple-600', 'text-white'));
+            btn.classList.add('bg-purple-600', 'text-white');
+            currentTargetTag = code;
+            document.getElementById('active-investigation-label').innerText = code;
+            document.getElementById('investigation-result-input').value = '';
+            document.getElementById('investigation-result-builder').classList.remove('hidden');
+        }
+
+        function appendCustomInvestigationTag() {
+            const v = document.getElementById('custom-investigation-input').value.trim();
+            if (!v) return;
+            const grid = document.getElementById('investigation-badge-grid');
+            grid.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="selectInvestigationTag(this,'${v}')" class="badge-btn bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold px-3.5 py-2.5 rounded-xl">${v}</button>`
+                );
+            document.getElementById('custom-investigation-input').value = '';
+            selectInvestigationTag(grid.lastChild, v);
+        }
+
+        function saveInvestigationPipeline() {
+            const result = document.getElementById('investigation-result-input').value || 'Normal';
+            if (currentTargetTag) {
+                selectedInvestigations = selectedInvestigations.filter(i => i.name !== currentTargetTag);
+                selectedInvestigations.push({
+                    name: currentTargetTag,
+                    result
+                });
+                renderInvestigationsView();
+            }
+            document.getElementById('investigation-result-builder').classList.add('hidden');
+            closeModal('investigation-modal');
+        }
+
+        function renderInvestigationsView() {
+            const c = document.getElementById('render-investigation-target');
+            const s = document.getElementById('live-section-investigation');
+            c.innerHTML = '';
+            if (selectedInvestigations.length > 0) {
+                s.classList.remove('hidden');
+                selectedInvestigations.forEach(i => {
+                    c.innerHTML +=
+                        `<div class="text-slate-900 py-0.5 text-xs font-bold">• ${i.name} <span class="text-purple-600 font-medium ml-1">[${i.result}]</span></div>`;
+                });
+            } else {
+                s.classList.add('hidden');
+            }
+        }
+
+        // ── Medicines ──────────────────────────────────────────────────────
+        function stageMedicineItem(btn, drugName) {
+            btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('bg-indigo-50', 'border-indigo-300'));
+            btn.classList.add('bg-indigo-50', 'border-indigo-300');
+            currentTargetTag = drugName;
+            document.getElementById('med-placeholder-notice').classList.add('hidden');
+            document.getElementById('med-scheduler-panel').classList.remove('hidden');
+            document.getElementById('scheduled-med-title').innerText = drugName;
+        }
+
+        function appendCustomMedicineCatalog() {
+            const v = document.getElementById('custom-medicine-name').value.trim();
+            if (!v) return;
+            const catalog = document.getElementById('medicine-catalog-list');
+            catalog.insertAdjacentHTML('afterbegin',
+                `<button type="button" onclick="stageMedicineItem(this,'${v}')" data-medname="${v.toLowerCase()}"
+             class="med-catalog-btn text-left text-xs text-indigo-600 font-semibold py-2.5 px-3 bg-indigo-50/30 border border-indigo-200 rounded-xl w-full flex items-center space-x-2"><span>✨</span><span>${v}</span></button>`
+                );
+            document.getElementById('custom-medicine-name').value = '';
+            stageMedicineItem(catalog.firstChild, v);
+        }
+
+        function commitMedicineToStack() {
+            const m = document.getElementById('check-morn').checked ? document.getElementById('dose-qty-1').value : '0';
+            const d = document.getElementById('check-noon').checked ? document.getElementById('dose-qty-2').value : '0';
+            const n = document.getElementById('check-night').checked ? document.getElementById('dose-qty-3').value : '0';
+            const e = document.getElementById('check-eve').checked ? document.getElementById('dose-qty-4').value : '0';
+
+            selectedMedicines.push({
+                name: currentTargetTag,
+                dosage: `${m} + ${d} + ${n} + ${e}`,
+                timing: document.getElementById('med-timing-select').value,
+                duration: document.getElementById('med-duration-input').value,
+                instruction: document.getElementById('med-instruction-input').value,
+            });
+            renderMedicinesView();
+            document.getElementById('med-scheduler-panel').classList.add('hidden');
+            document.getElementById('med-placeholder-notice').classList.remove('hidden');
+            closeModal('medicine-modal');
+        }
+
+        function renderMedicinesView() {
+            const c = document.getElementById('render-medication-target');
+            const s = document.getElementById('live-section-medication');
+            const notice = document.getElementById('med-blank-canvas-notice');
+            c.innerHTML = '';
+            if (selectedMedicines.length > 0) {
+                s.classList.remove('hidden');
+                notice.classList.add('hidden');
+                selectedMedicines.forEach(item => {
+                    c.innerHTML += `
+                    <li class="mb-1 pl-1 text-slate-900 font-bold">
+                        <div class="text-sm font-extrabold">${item.name}</div>
+                        <div class="text-xs text-slate-500 font-medium mt-0.5">
+                            💥 <span class="text-slate-800 font-bold">${item.dosage}</span>
+                            — <span class="text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">${item.timing}</span>
+                            — <span class="text-indigo-600 font-extrabold">${item.duration}</span>
+                            ${item.instruction ? `<br><span class="text-amber-700 text-[11px] font-bold bg-amber-50 px-2 py-0.5 rounded-lg mt-1 inline-block">Instruction: ${item.instruction}</span>` : ''}
+                        </div>
+                    </li>`;
+                });
+            } else {
+                s.classList.add('hidden');
+                notice.classList.remove('hidden');
+            }
+        }
+
+        // ── Advices ────────────────────────────────────────────────────────
+        function toggleAdviceTag(btn, val) {
+            if (btn.classList.contains('bg-indigo-600')) {
+                btn.className =
+                    'badge-btn bg-slate-50 border border-slate-200/80 text-slate-700 text-xs font-bold px-4 py-3 rounded-xl select-none';
+                selectedAdvices = selectedAdvices.filter(i => i !== val);
+            } else {
+                btn.className =
+                    'badge-btn bg-indigo-600 border border-indigo-600 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-sm select-none';
+                selectedAdvices.push(val);
+            }
+        }
+
+        function appendCustomAdviceTag() {
+            const v = document.getElementById('custom-advice-input').value.trim();
+            if (!v) return;
+            const grid = document.getElementById('advices-badge-grid');
+            grid.insertAdjacentHTML('beforeend',
+                `<button type="button" onclick="toggleAdviceTag(this,'${v}')" class="badge-btn bg-indigo-600 border border-indigo-600 text-white text-xs font-bold px-4 py-3 rounded-xl">${v}</button>`
+                );
+            selectedAdvices.push(v);
+            document.getElementById('custom-advice-input').value = '';
+        }
+
+        function saveAdvicePipeline() {
+            const c = document.getElementById('render-advice-target');
+            const s = document.getElementById('live-section-advice');
+            c.innerHTML = '';
+            if (selectedAdvices.length > 0) {
+                s.classList.remove('hidden');
+                selectedAdvices.forEach(a => {
+                    c.innerHTML += `<li class="text-xs font-bold text-slate-800 py-0.5">${a}</li>`;
+                });
+            } else {
+                s.classList.add('hidden');
+            }
+            closeModal('advice-modal');
+        }
+
+        // ── Treatment Templates ────────────────────────────────────────────
+        const treatmentTemplates = {
+            fever_pack: {
+                title: 'HN-01: Standard Fever & Flu',
+                complaints: [{
+                    name: 'Fever',
+                    duration: '3 days'
+                }, {
+                    name: 'Cough',
+                    duration: '7 days'
+                }],
+                examination: [{
+                    name: 'Pulse',
+                    value: '92 bpm'
+                }, {
+                    name: 'Blood Pressure',
+                    value: '120/70'
+                }],
+                investigations: [{
+                    name: 'Serum Uric Acid',
+                    result: 'High'
+                }],
+                diagnoses: ['Gout'],
+                medicines: [{
+                        name: 'Tab. Febus 80 mg',
+                        dosage: '0 + 0 + 1 + 0',
+                        timing: 'খাবারের পরে',
+                        duration: 'চলবে',
+                        instruction: ''
+                    },
+                    {
+                        name: 'Tab. Kochin 0.6',
+                        dosage: '1 + 1 + 1 + 0',
+                        timing: 'খাবারের পরে',
+                        duration: '৫ দিন',
+                        instruction: ''
+                    },
+                    {
+                        name: 'Tab. Naprosyn Plus',
+                        dosage: '1 + 0 + 1 + 0',
+                        timing: 'খাবারের পরে',
+                        duration: '১ সপ্তাহ',
+                        instruction: 'জ্বর থাকলে'
+                    },
+                ],
+                advices: ['Drink plenty of fluids', 'Take rest'],
+            }
+        };
+
+        function filterTreatmentTemplatesList(q) {
+            document.querySelectorAll('#ui-templates-container .template-wrapper-item').forEach(item => {
+                item.classList.toggle('hidden', !item.dataset.title.includes(q.toLowerCase()));
+            });
+        }
+
+        function loadTreatmentTemplate(key) {
+            const pack = treatmentTemplates[key];
+            if (!pack) return;
+            selectedComplaints = [...pack.complaints];
+            selectedExaminations = [...pack.examination];
+            selectedInvestigations = pack.investigations ? [...pack.investigations] : [];
+            selectedDiagnoses = pack.diagnoses ? [...pack.diagnoses] : [];
+            selectedMedicines = [...pack.medicines];
+            selectedAdvices = [...pack.advices];
+            renderComplaintsView();
+            renderExaminationView();
+            renderInvestigationsView();
+            renderDiagnosisView();
+            renderMedicinesView();
+            saveAdvicePipeline();
+        }
+
+        function createNewTreatmentTemplateFromUI() {
+            const titleInput = document.getElementById('custom-template-title-input');
+            const title = titleInput.value.trim();
+            if (!title) {
+                alert('Specify template name.');
+                return;
+            }
+            const key = 'custom_' + Date.now();
+            treatmentTemplates[key] = {
+                title,
+                complaints: [...selectedComplaints],
+                examination: [...selectedExaminations],
+                investigations: [...selectedInvestigations],
+                diagnoses: [...selectedDiagnoses],
+                medicines: [...selectedMedicines],
+                advices: [...selectedAdvices]
+            };
+            const searchMeta = title.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+            document.getElementById('ui-templates-container').insertAdjacentHTML('beforeend',
+                `<div class="template-wrapper-item" data-title="${searchMeta}">
+                <button type="button" onclick="loadTreatmentTemplate('${key}')"
+                        class="w-full text-left text-xs font-bold px-4 py-3 bg-emerald-50/60 hover:bg-indigo-600 text-emerald-950 hover:text-white border border-emerald-100 rounded-xl flex items-center justify-between group shadow-sm active:scale-95">
+                    <span>📋 ${title}</span>
+                    <span class="text-[10px] bg-white text-emerald-700 tracking-wide uppercase px-1.5 py-0.5 rounded">Load</span>
+                </button>
+             </div>`);
+            titleInput.value = '';
+        }
+
+        // ── Print View ─────────────────────────────────────────────────────
+        function hydratePrintTargetView(targetId, dataArray, templateFn, blockId) {
+            const c = document.getElementById(targetId);
+            const b = document.getElementById(blockId);
+            c.innerHTML = '';
+            if (dataArray.length > 0) {
+                if (b) b.classList.remove('hidden');
+                dataArray.forEach(item => {
+                    c.innerHTML += templateFn(item);
+                });
+            } else {
+                if (b) b.classList.add('hidden');
+            }
+        }
+
+        function routeToPrintPrescriptionPage() {
+            if (!currentPatient.name) {
+                alert('Please select a patient before printing.');
+                return;
+            }
+            document.getElementById('workspace-main-panel').classList.add('hidden');
+            document.querySelector('aside').classList.add('hidden');
+
+            document.getElementById('print-target-name').innerText = currentPatient.name;
+            document.getElementById('print-target-age').innerText = currentPatient.age + ' yrs';
+            document.getElementById('print-target-gender').innerText = currentPatient.gender;
+
+            hydratePrintTargetView('print-target-complaints', selectedComplaints,
+                i => `<div>• ${i.name} (${i.duration})</div>`, 'print-block-complaints');
+            hydratePrintTargetView('print-target-diagnosis', selectedDiagnoses,
+                i => `<div>• Provisional Dx: ${i}</div>`, 'print-block-diagnosis');
+            hydratePrintTargetView('print-target-examination', selectedExaminations,
+                i => `<div>• ${i.name}: ${i.value}</div>`, 'print-block-examination');
+            hydratePrintTargetView('print-target-investigation', selectedInvestigations,
+                i => `<div>• ${i.name} [${i.result}]</div>`, 'print-block-investigation');
+            hydratePrintTargetView('print-target-advice', selectedAdvices,
+                i => `<li>${i}</li>`, 'print-block-advice');
+
+            const medContainer = document.getElementById('print-target-medication');
+            medContainer.innerHTML = '';
+            if (selectedMedicines.length > 0) {
+                selectedMedicines.forEach(item => {
+                    medContainer.innerHTML += `
+                    <li class="pl-2 mb-2">
+                        <div class="text-sm font-black text-black">${item.name}</div>
+                        <div class="text-xs text-slate-800 font-semibold mt-0.5">
+                            &nbsp;&nbsp;&nbsp;&nbsp;${item.dosage}
+                            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— ${item.timing} — ${item.duration}
+                            ${item.instruction ? `<br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-xs font-bold italic text-slate-700">${item.instruction}</span>` : ''}
+                        </div>
+                    </li>`;
+                });
+            }
+
+            document.getElementById('print-prescription-view').classList.remove('hidden');
+        }
+
+        function exitPrintPrescriptionView() {
+            document.getElementById('print-prescription-view').classList.add('hidden');
+            document.getElementById('workspace-main-panel').classList.remove('hidden');
+            document.querySelector('aside').className =
+                'w-64 bg-slate-900 text-slate-200 flex flex-col fixed inset-y-0 left-0 z-40 shadow-xl no-print';
+        }
+
+        // ── Save to DB ─────────────────────────────────────────────────────
+        // FIX: accept btn element directly (onclick passes `this`) — no longer relies on event.currentTarget
+        function commitPrescriptionToDatabase(btn) {
+            if (!currentPatient.name) {
+                alert('Please select a patient first.');
+                return;
+            }
+            if (selectedMedicines.length === 0 && selectedComplaints.length === 0) {
+                alert('Add at least one complaint or medicine before saving.');
+                return;
+            }
+
+            const payload = {
+                patient: currentPatient,
+                complaints: selectedComplaints,
+                examinations: selectedExaminations,
+                diagnoses: selectedDiagnoses,
+                investigations: selectedInvestigations,
+                advices: selectedAdvices,
+                medicines: selectedMedicines,
+            };
+
+            // Disable button so it can't be double-clicked
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Saving…';
+            }
+
+            fetch("{{ route('prescriptions.store') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    },
+                    body: JSON.stringify(payload),
+                })
+                .then(res => {
+                    // FIX: parse JSON first so we can show the real server error message
+                    return res.json().then(data => ({
+                        ok: res.ok,
+                        status: res.status,
+                        data
+                    }));
+                })
+                .then(({
+                    ok,
+                    status,
+                    data
+                }) => {
+                    if (ok && data.success) {
+                        alert('✅ Prescription #' + data.id + ' saved successfully!');
+                    } else {
+                        // Show the actual error from the server (visible in the alert now)
+                        const msg = data.message || ('Server returned HTTP ' + status);
+                        alert('❌ Save failed:\n\n' + msg);
+                        console.error('Server error detail:', data);
+                    }
+                })
+                .catch(err => {
+                    alert('❌ Network/JS error:\n\n' + err.message);
+                    console.error(err);
+                })
+                .finally(() => {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = 'Save Record 💾';
+                    }
+                });
+        }
+
+        // "Print + Finalize" saves first, then opens print if save succeeds
+        function routeToPrintPrescriptionPage() {
+            if (!currentPatient.name) {
+                alert('Please select a patient first.');
+                return;
+            }
+            // Build print view directly (save is separate button)
+            document.getElementById('workspace-main-panel').classList.add('hidden');
+            document.querySelector('aside').classList.add('hidden');
+
+            document.getElementById('print-target-name').innerText = currentPatient.name;
+            document.getElementById('print-target-age').innerText = currentPatient.age + ' yrs';
+            document.getElementById('print-target-gender').innerText = currentPatient.gender;
+
+            hydratePrintTargetView('print-target-complaints', selectedComplaints,
+                i => `<div>• ${i.name} (${i.duration})</div>`, 'print-block-complaints');
+            hydratePrintTargetView('print-target-diagnosis', selectedDiagnoses,
+                i => `<div>• Provisional Dx: ${i}</div>`, 'print-block-diagnosis');
+            hydratePrintTargetView('print-target-examination', selectedExaminations,
+                i => `<div>• ${i.name}: ${i.value}</div>`, 'print-block-examination');
+            hydratePrintTargetView('print-target-investigation', selectedInvestigations,
+                i => `<div>• ${i.name} [${i.result}]</div>`, 'print-block-investigation');
+            hydratePrintTargetView('print-target-advice', selectedAdvices,
+                i => `<li>${i}</li>`, 'print-block-advice');
+
+            const medContainer = document.getElementById('print-target-medication');
+            medContainer.innerHTML = '';
+            selectedMedicines.forEach(item => {
+                medContainer.innerHTML += `
+                <li class="pl-2 mb-2">
+                    <div class="text-sm font-black text-black">${item.name}</div>
+                    <div class="text-xs text-slate-800 font-semibold mt-0.5">
+                        &nbsp;&nbsp;&nbsp;&nbsp;${item.dosage}
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;— ${item.timing} — ${item.duration}
+                        ${item.instruction ? `<br>&nbsp;&nbsp;&nbsp;&nbsp;<span class="text-xs font-bold italic text-slate-700">${item.instruction}</span>` : ''}
+                    </div>
+                </li>`;
+            });
+
+            document.getElementById('print-prescription-view').classList.remove('hidden');
+        }
+    </script>
+</body>
+
+</html>
