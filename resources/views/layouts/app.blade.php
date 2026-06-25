@@ -107,9 +107,37 @@
                 class="flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-slate-800 transition-all duration-200 {{ request()->routeIs('patients.index') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' : '' }}">
                 <span>👥</span> <span class="font-semibold text-sm">View All Patients</span>
             </a>
+
+            <a href="{{ route('appointments.index') }}"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 
+                {{ request()->routeIs('appointments.*') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                <span>📅</span>
+                <span class="font-semibold text-sm">Appointments Hub</span>
+            </a>
+
+            <div>
+                <a href="{{ route('appointments.create') }}"
+                    class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-5 rounded-xl text-sm shadow-md shadow-indigo-600/10 transition text-center">
+                    + Create New Appointment
+                </a>
+            </div>
         </nav>
         <div class="p-4 border-t border-slate-800 text-[11px] font-medium text-slate-500 text-center tracking-wide">
             Logged in as Admin/Doctor
+        </div>
+        <div class="p-4 border-t border-slate-800 flex flex-col gap-2">
+            <div class="text-[11px] font-medium text-slate-500 text-center tracking-wide">
+                {{ $doctor->doctors_name ?? 'Logged in as Doctor' }}
+            </div>
+
+            <form action="{{ route('logout') }}" method="POST"
+                onsubmit="return confirm('Log out of current workspace?');">
+                @csrf
+                <button type="submit"
+                    class="w-full bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-200 text-[10px] font-black uppercase tracking-widest py-2 rounded-lg transition-all cursor-pointer">
+                    Sign Out 📴
+                </button>
+            </form>
         </div>
     </aside>
 
