@@ -27,6 +27,7 @@
                     <tr>
                         <th class="px-6 py-4">Appointment ID</th>
                         <th class="px-6 py-4">Patient Profile</th>
+                        <th class="px-6 py-4">Assigned Doctor</th>
                         <th class="px-6 py-4">Phone Number</th>
                         <th class="px-6 py-4">Date &amp; Time Slot</th>
                         <th class="px-6 py-4 text-center">Status</th>
@@ -45,6 +46,13 @@
                                     {{ $appointment->patient->patient_age ?? '—' }} |
                                     {{ $appointment->patient->patient_gender ?? '—' }}</span>
                             </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-slate-700 font-semibold text-xs">
+                                🩺 {{ $appointment->doctor->doctors_name ?? 'Unassigned Doctor' }}
+                                @if (isset($appointment->doctor->doctors_speciality))
+                                    <span
+                                        class="text-[10px] font-medium text-slate-400 block mt-0.5">{{ $appointment->doctor->doctors_speciality }}</span>
+                                @endif
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap font-mono text-xs">
                                 {{ $appointment->patient->patient_phone_number ?? '—' }}
                             </td>
@@ -54,25 +62,10 @@
                                 <span class="text-xs font-mono text-indigo-600 block mt-0.5">⏰
                                     {{ date('h:i A', strtotime($appointment->appointment_date)) }}</span>
                             </td>
-                            {{-- <td class="px-6 py-4 whitespace-nowrap text-center">
-                                @if ($appointment->appointment_status == 1)
-                                    <span
-                                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">Pending</span>
-                                    @elif($appointment->appointment_status == 2)
-                                    <span
-                                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">Confirmed</span>
-                                @else
-                                    <span
-                                        class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-100">Cancelled</span>
-                                @endif
-                            </td> --}}
-                            {{-- Locate this section inside resources/views/appointments/index.blade.php --}}
                             <td class="px-6 py-4 whitespace-nowrap text-center">
                                 @if ($appointment->appointment_status == 1)
                                     <span
                                         class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">Pending</span>
-
-                                    {{-- FIXED: Changed @elif to @elseif --}}
                                 @elseif($appointment->appointment_status == 2)
                                     <span
                                         class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">Confirmed</span>
@@ -109,7 +102,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-6 py-12 text-center text-slate-400 font-normal">
+                            <td colspan="7" class="px-6 py-12 text-center text-slate-400 font-normal">
                                 <span class="text-2xl block mb-2">📅</span>
                                 No appointments found for your profile criteria.
                             </td>

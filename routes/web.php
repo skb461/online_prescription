@@ -55,6 +55,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/create', [AppointmentController::class, 'create'])->name('create'); // <-- Add form route
         Route::post('/', [AppointmentController::class, 'store'])->name('store');       // <-- Add save route
         Route::post('/{id}/status', [AppointmentController::class, 'updateStatus'])->name('updateStatus');
+
+        Route::get('/report', [AppointmentController::class, 'report'])->name('report');
     });
 
     // ── Medication API Service Proxy ──

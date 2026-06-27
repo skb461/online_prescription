@@ -67,13 +67,13 @@
             </button>
         </form>
 
-        <div class="mt-8 pt-6 border-t border-slate-100 text-center">
+        {{-- <div class="mt-8 pt-6 border-t border-slate-100 text-center">
             <p class="text-xs text-slate-500 font-medium">
                 New to the system framework?
                 <a href="{{ route('register') }}"
                     class="text-indigo-600 hover:text-indigo-700 font-bold ml-1 transition">Register here →</a>
             </p>
-        </div>
+        </div> --}}
 
     </div>
 

@@ -121,6 +121,13 @@
                     + Create New Appointment
                 </a>
             </div>
+
+            <a href="{{ route('appointments.report') }}"
+                class="flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 
+                {{ request()->routeIs('appointments.report') ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' : 'text-slate-300 hover:bg-slate-800 hover:text-white' }}">
+                <span>📊</span>
+                <span class="font-semibold text-sm">Appointments Report</span>
+            </a>
         </nav>
         <div class="p-4 border-t border-slate-800 text-[11px] font-medium text-slate-500 text-center tracking-wide">
             Logged in as Admin/Doctor
